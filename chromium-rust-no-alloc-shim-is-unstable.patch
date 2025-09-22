@@ -1,15 +1,16 @@
---- chromium-140.0.7339.80/build/rust/allocator/lib.rs	2025-08-29 20:50:09.000000000 +0200
-+++ chromium-139.0.7258.154/build/rust/allocator/lib.rs	2025-08-25 18:10:00.000000000 +0200
-@@ -90,6 +90,12 @@
+diff -up chromium-140.0.7339.185/build/rust/allocator/lib.rs.me chromium-140.0.7339.185/build/rust/allocator/lib.rs
+--- chromium-140.0.7339.185/build/rust/allocator/lib.rs.me	2025-09-22 10:37:11.057152982 +0200
++++ chromium-140.0.7339.185/build/rust/allocator/lib.rs	2025-09-22 14:38:10.367927121 +0200
+@@ -89,6 +89,12 @@ mod both_allocators {
+     #[rustc_std_internal_symbol]
      #[linkage = "weak"]
      fn __rust_no_alloc_shim_is_unstable_v2() {}
- 
-+    // TODO(crbug.com/422538133) Remove after rolling past
-+    // https://github.com/rust-lang/rust/pull/141061
-+    #[no_mangle]
++    
++    #[rustc_std_internal_symbol]
 +    #[linkage = "weak"]
-+    static __rust_no_alloc_shim_is_unstable: u8 = 0;
-+
++    fn __rust_alloc_error_handler_should_panic_v2() -> u8 {
++        0
++    }
+ 
      // Mangle the symbol name as rustc expects.
      #[rustc_std_internal_symbol]
-     #[allow(non_upper_case_globals)]
