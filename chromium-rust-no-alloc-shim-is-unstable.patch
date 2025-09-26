@@ -1,6 +1,6 @@
-diff -up chromium-140.0.7339.185/build/rust/allocator/lib.rs.me chromium-140.0.7339.185/build/rust/allocator/lib.rs
---- chromium-140.0.7339.185/build/rust/allocator/lib.rs.me	2025-09-22 10:37:11.057152982 +0200
-+++ chromium-140.0.7339.185/build/rust/allocator/lib.rs	2025-09-22 14:38:10.367927121 +0200
+diff -up chromium-140.0.7339.207/build/rust/allocator/lib.rs.rust-no-alloc-shim-is-unstable chromium-140.0.7339.207/build/rust/allocator/lib.rs
+--- chromium-140.0.7339.207/build/rust/allocator/lib.rs.rust-no-alloc-shim-is-unstable	2025-09-22 21:21:29.000000000 +0200
++++ chromium-140.0.7339.207/build/rust/allocator/lib.rs	2025-09-26 13:51:35.967078280 +0200
 @@ -89,6 +89,12 @@ mod both_allocators {
      #[rustc_std_internal_symbol]
      #[linkage = "weak"]
@@ -14,3 +14,15 @@ diff -up chromium-140.0.7339.185/build/rust/allocator/lib.rs.me chromium-140.0.7
  
      // Mangle the symbol name as rustc expects.
      #[rustc_std_internal_symbol]
+@@ -96,6 +102,11 @@ mod both_allocators {
+     #[linkage = "weak"]
+     static __rust_alloc_error_handler_should_panic: u8 = 0;
+ 
++    // Mangle the symbol name as rustc (1.84) expects on EL9
++    #[no_mangle]
++    #[linkage = "weak"]
++    static __rust_no_alloc_shim_is_unstable: u8 = 0;
++
+     // Mangle the symbol name as rustc expects.
+     #[rustc_std_internal_symbol]
+     #[allow(non_upper_case_globals)]
