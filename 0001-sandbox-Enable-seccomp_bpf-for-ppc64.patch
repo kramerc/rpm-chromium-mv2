@@ -1,32 +1,6 @@
-Index: chromium-140.0.7339.41/sandbox/linux/seccomp-bpf/trap.cc
-===================================================================
---- chromium-140.0.7339.41.orig/sandbox/linux/seccomp-bpf/trap.cc
-+++ chromium-140.0.7339.41/sandbox/linux/seccomp-bpf/trap.cc
-@@ -236,6 +236,20 @@ void Trap::SigSys(int nr, LinuxSigInfo*
-       SetIsInSigHandler();
-     }
- 
-+#if defined(__powerpc64__)
-+    // On ppc64+glibc, some syscalls seem to accidentally negate the first
-+    // parameter which causes checks against it to fail. For now, manually
-+    // negate them back.
-+    // TODO(sanastasio@raptorengineering.com): investigate this issue further
-+    auto nr = SECCOMP_SYSCALL(ctx);
-+    if (nr == __NR_openat || nr == __NR_mkdirat || nr == __NR_faccessat || nr == __NR_readlinkat ||
-+        nr == __NR_renameat || nr == __NR_renameat2 || nr == __NR_newfstatat || nr == __NR_unlinkat) {
-+        if (static_cast<int>(SECCOMP_PARM1(ctx)) > 0) {
-+            SECCOMP_PARM1(ctx) = -SECCOMP_PARM1(ctx);
-+        }
-+    }
-+#endif
-+
-     // Copy the seccomp-specific data into a arch_seccomp_data structure. This
-     // is what we are showing to TrapFnc callbacks that the system call
-     // evaluator registered with the sandbox.
-Index: chromium-140.0.7339.41/sandbox/features.gni
-===================================================================
---- chromium-140.0.7339.41.orig/sandbox/features.gni
-+++ chromium-140.0.7339.41/sandbox/features.gni
+diff -up chromium-141.0.7390.37/sandbox/features.gni.0001-sandbox-Enable-seccomp_bpf-for-ppc64 chromium-141.0.7390.37/sandbox/features.gni
+--- chromium-141.0.7390.37/sandbox/features.gni.0001-sandbox-Enable-seccomp_bpf-for-ppc64	2025-09-23 22:21:14.000000000 +0200
++++ chromium-141.0.7390.37/sandbox/features.gni	2025-09-28 10:15:55.414893495 +0200
 @@ -9,4 +9,5 @@
  use_seccomp_bpf = (is_linux || is_chromeos || is_android) &&
                    (current_cpu == "x86" || current_cpu == "x64" ||
@@ -34,35 +8,9 @@ Index: chromium-140.0.7339.41/sandbox/features.gni
 -                   current_cpu == "mipsel" || current_cpu == "mips64el")
 +                   current_cpu == "mipsel" || current_cpu == "mips64el" ||
 +                   current_cpu == "ppc64")
-Index: chromium-140.0.7339.41/sandbox/policy/linux/bpf_renderer_policy_linux.cc
-===================================================================
---- chromium-140.0.7339.41.orig/sandbox/policy/linux/bpf_renderer_policy_linux.cc
-+++ chromium-140.0.7339.41/sandbox/policy/linux/bpf_renderer_policy_linux.cc
-@@ -17,6 +17,11 @@
- #include "sandbox/linux/system_headers/linux_syscalls.h"
- #include "sandbox/policy/linux/sandbox_linux.h"
- 
-+// On PPC64, TCGETS is defined in terms of struct termios, so we must include termios.h
-+#ifdef __powerpc64__
-+#include <termios.h>
-+#endif
-+
- // TODO(vignatti): replace the local definitions below with #include
- // <linux/dma-buf.h> once kernel version 4.6 becomes widely used.
- #include <linux/types.h>
-@@ -86,7 +91,7 @@ ResultExpr RendererProcessPolicy::Evalua
-     case __NR_ftruncate64:
- #endif
- #if defined(__i386__) || defined(__x86_64__) || defined(__mips__) || \
--    defined(__aarch64__)
-+    defined(__aarch64__) || defined(__powerpc64__)
-     case __NR_getrlimit:
-     case __NR_setrlimit:
- // We allow setrlimit to dynamically adjust the address space limit as
-Index: chromium-140.0.7339.41/sandbox/linux/bpf_dsl/linux_syscall_ranges.h
-===================================================================
---- chromium-140.0.7339.41.orig/sandbox/linux/bpf_dsl/linux_syscall_ranges.h
-+++ chromium-140.0.7339.41/sandbox/linux/bpf_dsl/linux_syscall_ranges.h
+diff -up chromium-141.0.7390.37/sandbox/linux/bpf_dsl/linux_syscall_ranges.h.0001-sandbox-Enable-seccomp_bpf-for-ppc64 chromium-141.0.7390.37/sandbox/linux/bpf_dsl/linux_syscall_ranges.h
+--- chromium-141.0.7390.37/sandbox/linux/bpf_dsl/linux_syscall_ranges.h.0001-sandbox-Enable-seccomp_bpf-for-ppc64	2025-09-23 22:21:14.000000000 +0200
++++ chromium-141.0.7390.37/sandbox/linux/bpf_dsl/linux_syscall_ranges.h	2025-09-28 10:15:55.415120766 +0200
 @@ -56,6 +56,13 @@
  #define MAX_PUBLIC_SYSCALL __NR_syscalls
  #define MAX_SYSCALL MAX_PUBLIC_SYSCALL
@@ -77,10 +25,74 @@ Index: chromium-140.0.7339.41/sandbox/linux/bpf_dsl/linux_syscall_ranges.h
  #else
  #error "Unsupported architecture"
  #endif
-Index: chromium-140.0.7339.41/sandbox/linux/BUILD.gn
-===================================================================
---- chromium-140.0.7339.41.orig/sandbox/linux/BUILD.gn
-+++ chromium-140.0.7339.41/sandbox/linux/BUILD.gn
+diff -up chromium-141.0.7390.37/sandbox/linux/bpf_dsl/seccomp_macros.h.0001-sandbox-Enable-seccomp_bpf-for-ppc64 chromium-141.0.7390.37/sandbox/linux/bpf_dsl/seccomp_macros.h
+--- chromium-141.0.7390.37/sandbox/linux/bpf_dsl/seccomp_macros.h.0001-sandbox-Enable-seccomp_bpf-for-ppc64	2025-09-23 22:21:14.000000000 +0200
++++ chromium-141.0.7390.37/sandbox/linux/bpf_dsl/seccomp_macros.h	2025-09-28 10:15:55.416743928 +0200
+@@ -14,6 +14,9 @@
+ #if defined(__mips__)
+ // sys/user.h in eglibc misses size_t definition
+ #include <stddef.h>
++#elif defined(__powerpc64__)
++// Manually define greg_t on ppc64
++typedef unsigned long long greg_t;
+ #endif
+ #endif
+ 
+@@ -343,6 +346,51 @@ struct regs_struct {
+ #define SECCOMP_PT_PARM4(_regs) (_regs).regs[3]
+ #define SECCOMP_PT_PARM5(_regs) (_regs).regs[4]
+ #define SECCOMP_PT_PARM6(_regs) (_regs).regs[5]
++
++#elif defined(__powerpc64__)
++#include <asm/ptrace.h>
++
++typedef struct pt_regs regs_struct;
++
++#ifdef ARCH_CPU_LITTLE_ENDIAN
++#define SECCOMP_ARCH AUDIT_ARCH_PPC64LE
++#else
++#define SECCOMP_ARCH AUDIT_ARCH_PPC64
++#endif
++
++#define SECCOMP_REG(_ctx, _reg) ((_ctx)->uc_mcontext.regs->gpr[_reg])
++
++#define SECCOMP_RESULT(_ctx) SECCOMP_REG(_ctx, 3)
++#define SECCOMP_SYSCALL(_ctx) SECCOMP_REG(_ctx, 0)
++#define SECCOMP_IP(_ctx) (_ctx)->uc_mcontext.regs->nip
++#define SECCOMP_PARM1(_ctx) SECCOMP_REG(_ctx, 3)
++#define SECCOMP_PARM2(_ctx) SECCOMP_REG(_ctx, 4)
++#define SECCOMP_PARM3(_ctx) SECCOMP_REG(_ctx, 5)
++#define SECCOMP_PARM4(_ctx) SECCOMP_REG(_ctx, 6)
++#define SECCOMP_PARM5(_ctx) SECCOMP_REG(_ctx, 7)
++#define SECCOMP_PARM6(_ctx) SECCOMP_REG(_ctx, 8)
++
++#define SECCOMP_NR_IDX (offsetof(struct arch_seccomp_data, nr))
++#define SECCOMP_ARCH_IDX (offsetof(struct arch_seccomp_data, arch))
++#define SECCOMP_IP_MSB_IDX \
++  (offsetof(struct arch_seccomp_data, instruction_pointer) + 4)
++#define SECCOMP_IP_LSB_IDX \
++  (offsetof(struct arch_seccomp_data, instruction_pointer) + 0)
++#define SECCOMP_ARG_MSB_IDX(nr) \
++  (offsetof(struct arch_seccomp_data, args) + 8 * (nr) + 4)
++#define SECCOMP_ARG_LSB_IDX(nr) \
++  (offsetof(struct arch_seccomp_data, args) + 8 * (nr) + 0)
++
++#define SECCOMP_PT_RESULT(_regs) (_regs).gpr[3]
++#define SECCOMP_PT_SYSCALL(_regs) (_regs).gpr[0]
++#define SECCOMP_PT_IP(_regs) (_regs).nip
++#define SECCOMP_PT_PARM1(_regs) (_regs).gpr[3]
++#define SECCOMP_PT_PARM2(_regs) (_regs).gpr[4]
++#define SECCOMP_PT_PARM3(_regs) (_regs).gpr[5]
++#define SECCOMP_PT_PARM4(_regs) (_regs).gpr[6]
++#define SECCOMP_PT_PARM5(_regs) (_regs).gpr[7]
++#define SECCOMP_PT_PARM6(_regs) (_regs).gpr[8]
++
+ #else
+ #error Unsupported target platform
+ 
+diff -up chromium-141.0.7390.37/sandbox/linux/BUILD.gn.0001-sandbox-Enable-seccomp_bpf-for-ppc64 chromium-141.0.7390.37/sandbox/linux/BUILD.gn
+--- chromium-141.0.7390.37/sandbox/linux/BUILD.gn.0001-sandbox-Enable-seccomp_bpf-for-ppc64	2025-09-23 22:21:14.000000000 +0200
++++ chromium-141.0.7390.37/sandbox/linux/BUILD.gn	2025-09-28 10:15:55.415227970 +0200
 @@ -377,6 +377,8 @@ component("sandbox_services") {
  
  source_set("sandbox_services_headers") {
@@ -90,84 +102,9 @@ Index: chromium-140.0.7339.41/sandbox/linux/BUILD.gn
      "system_headers/arm64_linux_syscalls.h",
      "system_headers/arm_linux_syscalls.h",
      "system_headers/arm_linux_ucontext.h",
-Index: chromium-140.0.7339.41/sandbox/linux/system_headers/linux_syscalls.h
-===================================================================
---- chromium-140.0.7339.41.orig/sandbox/linux/system_headers/linux_syscalls.h
-+++ chromium-140.0.7339.41/sandbox/linux/system_headers/linux_syscalls.h
-@@ -35,5 +35,9 @@
- #include "sandbox/linux/system_headers/arm64_linux_syscalls.h"
- #endif
- 
-+#if defined(__powerpc64__)
-+#include "sandbox/linux/system_headers/ppc64_linux_syscalls.h"
-+#endif
-+
- #endif  // SANDBOX_LINUX_SYSTEM_HEADERS_LINUX_SYSCALLS_H_
- 
-Index: chromium-140.0.7339.41/sandbox/linux/system_headers/ppc64_linux_syscalls.h
-===================================================================
---- /dev/null
-+++ chromium-140.0.7339.41/sandbox/linux/system_headers/ppc64_linux_syscalls.h
-@@ -0,0 +1,25 @@
-+// Copyright 2014 The Chromium Authors. All rights reserved.
-+// Use of this source code is governed by a BSD-style license that can be
-+// found in the LICENSE file.
-+
-+#ifndef SANDBOX_LINUX_SYSTEM_HEADERS_PPC64_LINUX_SYSCALLS_H_
-+#define SANDBOX_LINUX_SYSTEM_HEADERS_PPC64_LINUX_SYSCALLS_H_
-+
-+#include <asm/unistd.h>
-+
-+//TODO: is it necessary to redefine syscall numbers for PPC64?
-+// Needed for Ubuntu/Debian/Centos/RHEL:
-+#if !defined(__NR_shmget)
-+#define __NR_shmget     395
-+#endif
-+#if !defined(__NR_shmdt)
-+#define __NR_shmdt      398
-+#endif
-+#if !defined(__NR_shmctl)
-+#define __NR_shmctl     396
-+#endif
-+#if !defined(__NR_shmat)
-+#define __NR_shmat      397
-+#endif
-+
-+#endif  // SANDBOX_LINUX_SYSTEM_HEADERS_PPC64_LINUX_SYSCALLS_H_
-Index: chromium-140.0.7339.41/sandbox/linux/system_headers/ppc64_linux_ucontext.h
-===================================================================
---- /dev/null
-+++ chromium-140.0.7339.41/sandbox/linux/system_headers/ppc64_linux_ucontext.h
-@@ -0,0 +1,12 @@
-+// Copyright 2014 The Chromium Authors. All rights reserved.
-+// Use of this source code is governed by a BSD-style license that can be
-+// found in the LICENSE file.
-+
-+#ifndef SANDBOX_LINUX_SYSTEM_HEADERS_PPC64_LINUX_UCONTEXT_H_
-+#define SANDBOX_LINUX_SYSTEM_HEADERS_PPC64_LINUX_UCONTEXT_H_
-+
-+#include <sys/ucontext.h>
-+
-+//TODO: is it necessary to redefine ucontext on PPC64?
-+
-+#endif  // SANDBOX_LINUX_SYSTEM_HEADERS_PPC64_LINUX_UCONTEXT_H_
-Index: chromium-140.0.7339.41/sandbox/linux/syscall_broker/broker_process.cc
-===================================================================
---- chromium-140.0.7339.41.orig/sandbox/linux/syscall_broker/broker_process.cc
-+++ chromium-140.0.7339.41/sandbox/linux/syscall_broker/broker_process.cc
-@@ -167,7 +167,7 @@ bool BrokerProcess::IsSyscallBrokerable(
- #if defined(__NR_fstatat64)
-     case __NR_fstatat64:
- #endif
--#if defined(__x86_64__) || defined(__aarch64__)
-+#if defined(__x86_64__) || defined(__aarch64__) || defined(__powerpc64__)
-     case __NR_newfstatat:
- #endif
-       return !fast_check || policy_->allowed_command_set.test(COMMAND_STAT);
-Index: chromium-140.0.7339.41/sandbox/linux/seccomp-bpf-helpers/baseline_policy.cc
-===================================================================
---- chromium-140.0.7339.41.orig/sandbox/linux/seccomp-bpf-helpers/baseline_policy.cc
-+++ chromium-140.0.7339.41/sandbox/linux/seccomp-bpf-helpers/baseline_policy.cc
+diff -up chromium-141.0.7390.37/sandbox/linux/seccomp-bpf-helpers/baseline_policy.cc.0001-sandbox-Enable-seccomp_bpf-for-ppc64 chromium-141.0.7390.37/sandbox/linux/seccomp-bpf-helpers/baseline_policy.cc
+--- chromium-141.0.7390.37/sandbox/linux/seccomp-bpf-helpers/baseline_policy.cc.0001-sandbox-Enable-seccomp_bpf-for-ppc64	2025-09-23 22:21:14.000000000 +0200
++++ chromium-141.0.7390.37/sandbox/linux/seccomp-bpf-helpers/baseline_policy.cc	2025-09-28 10:15:55.415675419 +0200
 @@ -90,7 +90,8 @@ bool IsBaselinePolicyWatched(int sysno)
           SyscallSets::IsPrctl(sysno) ||
           SyscallSets::IsProcessGroupOrSession(sysno) ||
@@ -197,20 +134,54 @@ Index: chromium-140.0.7339.41/sandbox/linux/seccomp-bpf-helpers/baseline_policy.
    if (SyscallSets::IsSocketCall(sysno))
      return RestrictSocketcallCommand();
  #endif
-Index: chromium-140.0.7339.41/sandbox/linux/seccomp-bpf-helpers/syscall_parameters_restrictions.cc
-===================================================================
---- chromium-140.0.7339.41.orig/sandbox/linux/seccomp-bpf-helpers/syscall_parameters_restrictions.cc
-+++ chromium-140.0.7339.41/sandbox/linux/seccomp-bpf-helpers/syscall_parameters_restrictions.cc
-@@ -39,7 +39,7 @@
- #include "sandbox/linux/system_headers/linux_syscalls.h"
- #include "sandbox/linux/system_headers/linux_time.h"
+diff -up chromium-141.0.7390.37/sandbox/linux/seccomp-bpf-helpers/baseline_policy_unittest.cc.0001-sandbox-Enable-seccomp_bpf-for-ppc64 chromium-141.0.7390.37/sandbox/linux/seccomp-bpf-helpers/baseline_policy_unittest.cc
+--- chromium-141.0.7390.37/sandbox/linux/seccomp-bpf-helpers/baseline_policy_unittest.cc.0001-sandbox-Enable-seccomp_bpf-for-ppc64	2025-09-23 22:21:14.000000000 +0200
++++ chromium-141.0.7390.37/sandbox/linux/seccomp-bpf-helpers/baseline_policy_unittest.cc	2025-09-28 10:15:55.417132817 +0200
+@@ -350,8 +350,10 @@ TEST_BASELINE_SIGSYS(__NR_timer_create)
+ 
+ #if !defined(__aarch64__)
+ TEST_BASELINE_SIGSYS(__NR_inotify_init)
++#if !defined(__powerpc64__)
+ TEST_BASELINE_SIGSYS(__NR_vserver)
+ #endif
++#endif
+ 
+ #if defined(LIBC_GLIBC) && !BUILDFLAG(IS_CHROMEOS)
+ BPF_TEST_C(BaselinePolicy, FutexEINVAL, BaselinePolicy) {
+diff -up chromium-141.0.7390.37/sandbox/linux/seccomp-bpf-helpers/sigsys_handlers.cc.0001-sandbox-Enable-seccomp_bpf-for-ppc64 chromium-141.0.7390.37/sandbox/linux/seccomp-bpf-helpers/sigsys_handlers.cc
+--- chromium-141.0.7390.37/sandbox/linux/seccomp-bpf-helpers/sigsys_handlers.cc.0001-sandbox-Enable-seccomp_bpf-for-ppc64	2025-09-23 22:21:14.000000000 +0200
++++ chromium-141.0.7390.37/sandbox/linux/seccomp-bpf-helpers/sigsys_handlers.cc	2025-09-28 10:15:55.417609762 +0200
+@@ -389,7 +389,16 @@ intptr_t SIGSYSFstatatHandler(const stru
+   if (args.nr == __NR_fstatat_default) {
+     if (*reinterpret_cast<const char*>(args.args[1]) == '\0' &&
+         args.args[3] == static_cast<uint64_t>(AT_EMPTY_PATH)) {
+-      return syscall(__NR_fstat_default, static_cast<int>(args.args[0]),
++          int fd = static_cast<int>(args.args[0]);
++#if defined(__powerpc64__)
++      // On ppc64+glibc, some syscalls seem to accidentally negate the first
++      // parameter which causes checks against it to fail. For now, manually
++      // negate them back.
++      // TODO: Investigate the root cause and fix in glibc
++      if (fd < 0)
++        fd = -fd;
++#endif
++      return syscall(__NR_fstat_default, fd,
+                      reinterpret_cast<default_stat_struct*>(args.args[2]));
+     }
+     return -reinterpret_cast<intptr_t>(fs_denied_errno);
+diff -up chromium-141.0.7390.37/sandbox/linux/seccomp-bpf-helpers/syscall_parameters_restrictions.cc.0001-sandbox-Enable-seccomp_bpf-for-ppc64 chromium-141.0.7390.37/sandbox/linux/seccomp-bpf-helpers/syscall_parameters_restrictions.cc
+--- chromium-141.0.7390.37/sandbox/linux/seccomp-bpf-helpers/syscall_parameters_restrictions.cc.0001-sandbox-Enable-seccomp_bpf-for-ppc64	2025-09-23 22:21:14.000000000 +0200
++++ chromium-141.0.7390.37/sandbox/linux/seccomp-bpf-helpers/syscall_parameters_restrictions.cc	2025-09-28 10:15:55.415814493 +0200
+@@ -43,7 +43,7 @@
+ #define MAP_DROPPABLE 0x08  // Zero memory under memory pressure.
+ #endif
  
 -#if BUILDFLAG(IS_LINUX) && !defined(__arm__) && !defined(__aarch64__) && \
 +#if BUILDFLAG(IS_LINUX) && !defined(__arm__) && !defined(__aarch64__) && !defined(__powerpc64__) && \
      !defined(PTRACE_GET_THREAD_AREA)
  // Also include asm/ptrace-abi.h since ptrace.h in older libc (for instance
  // the one in Ubuntu 16.04 LTS) is missing PTRACE_GET_THREAD_AREA.
-@@ -48,6 +48,11 @@
+@@ -52,6 +52,11 @@
  #include <asm/ptrace-abi.h>
  #endif
  
@@ -222,7 +193,7 @@ Index: chromium-140.0.7339.41/sandbox/linux/seccomp-bpf-helpers/syscall_paramete
  #if BUILDFLAG(IS_ANDROID)
  
  #if !defined(F_DUPFD_CLOEXEC)
-@@ -105,6 +110,15 @@ inline bool IsArchitectureMips() {
+@@ -109,6 +114,15 @@ inline bool IsArchitectureMips() {
  #endif
  }
  
@@ -238,7 +209,7 @@ Index: chromium-140.0.7339.41/sandbox/linux/seccomp-bpf-helpers/syscall_paramete
  // Ubuntu's version of glibc has a race condition in sem_post that can cause
  // it to call futex(2) with bogus op arguments. To workaround this, we need
  // to allow those futex(2) calls to fail with EINVAL, instead of crashing the
-@@ -279,9 +293,11 @@ ResultExpr RestrictFcntlCommands() {
+@@ -287,9 +301,11 @@ ResultExpr RestrictFcntlCommands() {
    // operator.
    // Glibc overrides the kernel's O_LARGEFILE value. Account for this.
    uint64_t kOLargeFileFlag = O_LARGEFILE;
@@ -251,7 +222,7 @@ Index: chromium-140.0.7339.41/sandbox/linux/seccomp-bpf-helpers/syscall_paramete
    const Arg<int> cmd(1);
    const Arg<long> long_arg(2);
  
-@@ -304,8 +320,17 @@ ResultExpr RestrictFcntlCommands() {
+@@ -312,8 +328,17 @@ ResultExpr RestrictFcntlCommands() {
                F_SETLKW,
                F_GETLK,
                F_DUPFD,
@@ -271,7 +242,7 @@ Index: chromium-140.0.7339.41/sandbox/linux/seccomp-bpf-helpers/syscall_paramete
        .Case(F_SETFL,
              If((long_arg & ~kAllowedMask) == 0, Allow()).Else(CrashSIGSYS()))
        .Case(F_ADD_SEALS,
-@@ -314,7 +339,7 @@ ResultExpr RestrictFcntlCommands() {
+@@ -322,7 +347,7 @@ ResultExpr RestrictFcntlCommands() {
    // clang-format on
  }
  
@@ -280,7 +251,7 @@ Index: chromium-140.0.7339.41/sandbox/linux/seccomp-bpf-helpers/syscall_paramete
  ResultExpr RestrictSocketcallCommand() {
    // Unfortunately, we are unable to restrict the first parameter to
    // socketpair(2). Whilst initially sounding bad, it's noteworthy that very
-@@ -480,7 +505,7 @@ ResultExpr RestrictPtrace() {
+@@ -488,7 +513,7 @@ ResultExpr RestrictPtrace() {
  #endif
    return Switch(request)
        .Cases({
@@ -289,7 +260,7 @@ Index: chromium-140.0.7339.41/sandbox/linux/seccomp-bpf-helpers/syscall_paramete
                   PTRACE_GETREGS, PTRACE_GETFPREGS, PTRACE_GET_THREAD_AREA,
                   PTRACE_GETREGSET,
  #endif
-@@ -520,13 +545,14 @@ SANDBOX_EXPORT bpf_dsl::ResultExpr Restr
+@@ -528,13 +553,14 @@ SANDBOX_EXPORT bpf_dsl::ResultExpr Restr
    size_t argIndex;
    switch (sysno) {
  #if defined(__arm__) || \
@@ -306,10 +277,9 @@ Index: chromium-140.0.7339.41/sandbox/linux/seccomp-bpf-helpers/syscall_paramete
      case __NR_sendto:  // Could specify destination.
        argIndex = 3;
        break;
-Index: chromium-140.0.7339.41/sandbox/linux/seccomp-bpf-helpers/syscall_parameters_restrictions.h
-===================================================================
---- chromium-140.0.7339.41.orig/sandbox/linux/seccomp-bpf-helpers/syscall_parameters_restrictions.h
-+++ chromium-140.0.7339.41/sandbox/linux/seccomp-bpf-helpers/syscall_parameters_restrictions.h
+diff -up chromium-141.0.7390.37/sandbox/linux/seccomp-bpf-helpers/syscall_parameters_restrictions.h.0001-sandbox-Enable-seccomp_bpf-for-ppc64 chromium-141.0.7390.37/sandbox/linux/seccomp-bpf-helpers/syscall_parameters_restrictions.h
+--- chromium-141.0.7390.37/sandbox/linux/seccomp-bpf-helpers/syscall_parameters_restrictions.h.0001-sandbox-Enable-seccomp_bpf-for-ppc64	2025-09-23 22:21:14.000000000 +0200
++++ chromium-141.0.7390.37/sandbox/linux/seccomp-bpf-helpers/syscall_parameters_restrictions.h	2025-09-28 10:15:55.415949009 +0200
 @@ -56,7 +56,7 @@ SANDBOX_EXPORT bpf_dsl::ResultExpr Restr
  // O_NONBLOCK | O_SYNC | O_LARGEFILE | O_CLOEXEC | O_NOATIME.
  SANDBOX_EXPORT bpf_dsl::ResultExpr RestrictFcntlCommands();
@@ -319,10 +289,9 @@ Index: chromium-140.0.7339.41/sandbox/linux/seccomp-bpf-helpers/syscall_paramete
  // Restrict socketcall(2) to only allow socketpair(2), send(2), recv(2),
  // sendto(2), recvfrom(2), shutdown(2), sendmsg(2) and recvmsg(2).
  SANDBOX_EXPORT bpf_dsl::ResultExpr RestrictSocketcallCommand();
-Index: chromium-140.0.7339.41/sandbox/linux/seccomp-bpf-helpers/syscall_sets.cc
-===================================================================
---- chromium-140.0.7339.41.orig/sandbox/linux/seccomp-bpf-helpers/syscall_sets.cc
-+++ chromium-140.0.7339.41/sandbox/linux/seccomp-bpf-helpers/syscall_sets.cc
+diff -up chromium-141.0.7390.37/sandbox/linux/seccomp-bpf-helpers/syscall_sets.cc.0001-sandbox-Enable-seccomp_bpf-for-ppc64 chromium-141.0.7390.37/sandbox/linux/seccomp-bpf-helpers/syscall_sets.cc
+--- chromium-141.0.7390.37/sandbox/linux/seccomp-bpf-helpers/syscall_sets.cc.0001-sandbox-Enable-seccomp_bpf-for-ppc64	2025-09-23 22:21:14.000000000 +0200
++++ chromium-141.0.7390.37/sandbox/linux/seccomp-bpf-helpers/syscall_sets.cc	2025-09-28 10:15:55.416060681 +0200
 @@ -29,7 +29,8 @@ bool SyscallSets::IsAllowedGettime(int s
    switch (sysno) {
      case __NR_gettimeofday:
@@ -782,10 +751,9 @@ Index: chromium-140.0.7339.41/sandbox/linux/seccomp-bpf-helpers/syscall_sets.cc
      case __NR_vserver:
  #endif
        return true;
-Index: chromium-140.0.7339.41/sandbox/linux/seccomp-bpf-helpers/syscall_sets.h
-===================================================================
---- chromium-140.0.7339.41.orig/sandbox/linux/seccomp-bpf-helpers/syscall_sets.h
-+++ chromium-140.0.7339.41/sandbox/linux/seccomp-bpf-helpers/syscall_sets.h
+diff -up chromium-141.0.7390.37/sandbox/linux/seccomp-bpf-helpers/syscall_sets.h.0001-sandbox-Enable-seccomp_bpf-for-ppc64 chromium-141.0.7390.37/sandbox/linux/seccomp-bpf-helpers/syscall_sets.h
+--- chromium-141.0.7390.37/sandbox/linux/seccomp-bpf-helpers/syscall_sets.h.0001-sandbox-Enable-seccomp_bpf-for-ppc64	2025-09-23 22:21:14.000000000 +0200
++++ chromium-141.0.7390.37/sandbox/linux/seccomp-bpf-helpers/syscall_sets.h	2025-09-28 10:15:55.416557304 +0200
 @@ -46,13 +46,14 @@ class SANDBOX_EXPORT SyscallSets {
    static bool IsDeniedGetOrModifySocket(int sysno);
  
@@ -835,129 +803,9 @@ Index: chromium-140.0.7339.41/sandbox/linux/seccomp-bpf-helpers/syscall_sets.h
    // Big system V multiplexing system call.
    static bool IsSystemVIpc(int sysno);
  #endif
-Index: chromium-140.0.7339.41/sandbox/linux/services/syscall_wrappers.cc
-===================================================================
---- chromium-140.0.7339.41.orig/sandbox/linux/services/syscall_wrappers.cc
-+++ chromium-140.0.7339.41/sandbox/linux/services/syscall_wrappers.cc
-@@ -68,7 +68,7 @@ long sys_clone(unsigned long flags,
- #if defined(ARCH_CPU_X86_64)
-   return syscall(__NR_clone, flags, child_stack, ptid, ctid, tls);
- #elif defined(ARCH_CPU_X86) || defined(ARCH_CPU_ARM_FAMILY) || \
--    defined(ARCH_CPU_MIPS_FAMILY)
-+    defined(ARCH_CPU_MIPS_FAMILY) || defined(ARCH_CPU_PPC64_FAMILY)
-   // CONFIG_CLONE_BACKWARDS defined.
-   return syscall(__NR_clone, flags, child_stack, ptid, tls, ctid);
- #endif
-Index: chromium-140.0.7339.41/sandbox/linux/bpf_dsl/seccomp_macros.h
-===================================================================
---- chromium-140.0.7339.41.orig/sandbox/linux/bpf_dsl/seccomp_macros.h
-+++ chromium-140.0.7339.41/sandbox/linux/bpf_dsl/seccomp_macros.h
-@@ -14,6 +14,9 @@
- #if defined(__mips__)
- // sys/user.h in eglibc misses size_t definition
- #include <stddef.h>
-+#elif defined(__powerpc64__)
-+// Manually define greg_t on ppc64
-+typedef unsigned long long greg_t;
- #endif
- #endif
- 
-@@ -343,6 +346,51 @@ struct regs_struct {
- #define SECCOMP_PT_PARM4(_regs) (_regs).regs[3]
- #define SECCOMP_PT_PARM5(_regs) (_regs).regs[4]
- #define SECCOMP_PT_PARM6(_regs) (_regs).regs[5]
-+
-+#elif defined(__powerpc64__)
-+#include <asm/ptrace.h>
-+
-+typedef struct pt_regs regs_struct;
-+
-+#ifdef ARCH_CPU_LITTLE_ENDIAN
-+#define SECCOMP_ARCH AUDIT_ARCH_PPC64LE
-+#else
-+#define SECCOMP_ARCH AUDIT_ARCH_PPC64
-+#endif
-+
-+#define SECCOMP_REG(_ctx, _reg) ((_ctx)->uc_mcontext.regs->gpr[_reg])
-+
-+#define SECCOMP_RESULT(_ctx) SECCOMP_REG(_ctx, 3)
-+#define SECCOMP_SYSCALL(_ctx) SECCOMP_REG(_ctx, 0)
-+#define SECCOMP_IP(_ctx) (_ctx)->uc_mcontext.regs->nip
-+#define SECCOMP_PARM1(_ctx) SECCOMP_REG(_ctx, 3)
-+#define SECCOMP_PARM2(_ctx) SECCOMP_REG(_ctx, 4)
-+#define SECCOMP_PARM3(_ctx) SECCOMP_REG(_ctx, 5)
-+#define SECCOMP_PARM4(_ctx) SECCOMP_REG(_ctx, 6)
-+#define SECCOMP_PARM5(_ctx) SECCOMP_REG(_ctx, 7)
-+#define SECCOMP_PARM6(_ctx) SECCOMP_REG(_ctx, 8)
-+
-+#define SECCOMP_NR_IDX (offsetof(struct arch_seccomp_data, nr))
-+#define SECCOMP_ARCH_IDX (offsetof(struct arch_seccomp_data, arch))
-+#define SECCOMP_IP_MSB_IDX \
-+  (offsetof(struct arch_seccomp_data, instruction_pointer) + 4)
-+#define SECCOMP_IP_LSB_IDX \
-+  (offsetof(struct arch_seccomp_data, instruction_pointer) + 0)
-+#define SECCOMP_ARG_MSB_IDX(nr) \
-+  (offsetof(struct arch_seccomp_data, args) + 8 * (nr) + 4)
-+#define SECCOMP_ARG_LSB_IDX(nr) \
-+  (offsetof(struct arch_seccomp_data, args) + 8 * (nr) + 0)
-+
-+#define SECCOMP_PT_RESULT(_regs) (_regs).gpr[3]
-+#define SECCOMP_PT_SYSCALL(_regs) (_regs).gpr[0]
-+#define SECCOMP_PT_IP(_regs) (_regs).nip
-+#define SECCOMP_PT_PARM1(_regs) (_regs).gpr[3]
-+#define SECCOMP_PT_PARM2(_regs) (_regs).gpr[4]
-+#define SECCOMP_PT_PARM3(_regs) (_regs).gpr[5]
-+#define SECCOMP_PT_PARM4(_regs) (_regs).gpr[6]
-+#define SECCOMP_PT_PARM5(_regs) (_regs).gpr[7]
-+#define SECCOMP_PT_PARM6(_regs) (_regs).gpr[8]
-+
- #else
- #error Unsupported target platform
- 
-Index: chromium-140.0.7339.41/sandbox/linux/system_headers/linux_seccomp.h
-===================================================================
---- chromium-140.0.7339.41.orig/sandbox/linux/system_headers/linux_seccomp.h
-+++ chromium-140.0.7339.41/sandbox/linux/system_headers/linux_seccomp.h
-@@ -38,6 +38,9 @@
- #ifndef EM_AARCH64
- #define EM_AARCH64 183
- #endif
-+#ifndef EM_PPC64
-+#define EM_PPC64 21
-+#endif
- 
- #ifndef __AUDIT_ARCH_64BIT
- #define __AUDIT_ARCH_64BIT 0x80000000
-@@ -70,6 +73,12 @@
- #ifndef AUDIT_ARCH_AARCH64
- #define AUDIT_ARCH_AARCH64 (EM_AARCH64 | __AUDIT_ARCH_64BIT | __AUDIT_ARCH_LE)
- #endif
-+#ifndef AUDIT_ARCH_PPC64
-+#define AUDIT_ARCH_PPC64 (EM_PPC64 | __AUDIT_ARCH_64BIT)
-+#endif
-+#ifndef AUDIT_ARCH_PPC64LE
-+#define AUDIT_ARCH_PPC64LE (EM_PPC64 | __AUDIT_ARCH_64BIT | __AUDIT_ARCH_LE)
-+#endif
- 
- // For prctl.h
- #ifndef PR_SET_SECCOMP
-Index: chromium-140.0.7339.41/sandbox/linux/system_headers/linux_signal.h
-===================================================================
---- chromium-140.0.7339.41.orig/sandbox/linux/system_headers/linux_signal.h
-+++ chromium-140.0.7339.41/sandbox/linux/system_headers/linux_signal.h
-@@ -13,7 +13,7 @@
- // (not undefined, but defined different values and in different memory
- // layouts). So, fill the gap here.
- #if defined(__i386__) || defined(__x86_64__) || defined(__arm__) || \
--    defined(__aarch64__)
-+    defined(__aarch64__) || defined(__powerpc64__)
- 
- #define LINUX_SIGHUP 1
- #define LINUX_SIGINT 2
-Index: chromium-140.0.7339.41/sandbox/linux/seccomp-bpf/syscall.cc
-===================================================================
---- chromium-140.0.7339.41.orig/sandbox/linux/seccomp-bpf/syscall.cc
-+++ chromium-140.0.7339.41/sandbox/linux/seccomp-bpf/syscall.cc
+diff -up chromium-141.0.7390.37/sandbox/linux/seccomp-bpf/syscall.cc.0001-sandbox-Enable-seccomp_bpf-for-ppc64 chromium-141.0.7390.37/sandbox/linux/seccomp-bpf/syscall.cc
+--- chromium-141.0.7390.37/sandbox/linux/seccomp-bpf/syscall.cc.0001-sandbox-Enable-seccomp_bpf-for-ppc64	2025-09-23 22:21:14.000000000 +0200
++++ chromium-141.0.7390.37/sandbox/linux/seccomp-bpf/syscall.cc	2025-09-28 10:15:55.417019291 +0200
 @@ -19,7 +19,7 @@ namespace sandbox {
  namespace {
  
@@ -1052,25 +900,129 @@ Index: chromium-140.0.7339.41/sandbox/linux/seccomp-bpf/syscall.cc
  #endif
    SECCOMP_RESULT(ctx) = static_cast<greg_t>(ret_val);
  }
-Index: chromium-140.0.7339.41/sandbox/linux/seccomp-bpf-helpers/baseline_policy_unittest.cc
-===================================================================
---- chromium-140.0.7339.41.orig/sandbox/linux/seccomp-bpf-helpers/baseline_policy_unittest.cc
-+++ chromium-140.0.7339.41/sandbox/linux/seccomp-bpf-helpers/baseline_policy_unittest.cc
-@@ -350,8 +350,10 @@ TEST_BASELINE_SIGSYS(__NR_timer_create)
+diff -up chromium-141.0.7390.37/sandbox/linux/seccomp-bpf/trap.cc.0001-sandbox-Enable-seccomp_bpf-for-ppc64 chromium-141.0.7390.37/sandbox/linux/seccomp-bpf/trap.cc
+--- chromium-141.0.7390.37/sandbox/linux/seccomp-bpf/trap.cc.0001-sandbox-Enable-seccomp_bpf-for-ppc64	2025-09-23 22:21:14.000000000 +0200
++++ chromium-141.0.7390.37/sandbox/linux/seccomp-bpf/trap.cc	2025-09-28 10:15:55.414751305 +0200
+@@ -236,6 +236,20 @@ void Trap::SigSys(int nr, LinuxSigInfo*
+       SetIsInSigHandler();
+     }
  
- #if !defined(__aarch64__)
- TEST_BASELINE_SIGSYS(__NR_inotify_init)
-+#if !defined(__powerpc64__)
- TEST_BASELINE_SIGSYS(__NR_vserver)
++#if defined(__powerpc64__)
++    // On ppc64+glibc, some syscalls seem to accidentally negate the first
++    // parameter which causes checks against it to fail. For now, manually
++    // negate them back.
++    // TODO(sanastasio@raptorengineering.com): investigate this issue further
++    auto nr = SECCOMP_SYSCALL(ctx);
++    if (nr == __NR_openat || nr == __NR_mkdirat || nr == __NR_faccessat || nr == __NR_readlinkat ||
++        nr == __NR_renameat || nr == __NR_renameat2 || nr == __NR_newfstatat || nr == __NR_unlinkat) {
++        if (static_cast<int>(SECCOMP_PARM1(ctx)) > 0) {
++            SECCOMP_PARM1(ctx) = -SECCOMP_PARM1(ctx);
++        }
++    }
++#endif
++
+     // Copy the seccomp-specific data into a arch_seccomp_data structure. This
+     // is what we are showing to TrapFnc callbacks that the system call
+     // evaluator registered with the sandbox.
+diff -up chromium-141.0.7390.37/sandbox/linux/services/credentials.cc.0001-sandbox-Enable-seccomp_bpf-for-ppc64 chromium-141.0.7390.37/sandbox/linux/services/credentials.cc
+--- chromium-141.0.7390.37/sandbox/linux/services/credentials.cc.0001-sandbox-Enable-seccomp_bpf-for-ppc64	2025-09-23 22:21:14.000000000 +0200
++++ chromium-141.0.7390.37/sandbox/linux/services/credentials.cc	2025-09-28 10:18:58.609023878 +0200
+@@ -85,7 +85,7 @@ bool ChrootToSafeEmptyDir() {
+   alignas(16) std::array<char, PTHREAD_STACK_MIN_CONST> stack_buf;
+ 
+ #if defined(ARCH_CPU_X86_FAMILY) || defined(ARCH_CPU_ARM_FAMILY) || \
+-    defined(ARCH_CPU_MIPS_FAMILY)
++    defined(ARCH_CPU_MIPS_FAMILY) || defined(ARCH_CPU_PPC64_FAMILY)
+   // SAFETY: This is the `stack` argument of `clone(2)`. Because the stack grows
+   // downward on these architectures, this is the topmost address of the memory
+   // space for the stack, and the address will not be dereferenced.
+@@ -96,7 +96,8 @@ bool ChrootToSafeEmptyDir() {
+ 
+   int clone_flags = CLONE_FS | LINUX_SIGCHLD;
+   void* tls = nullptr;
+-#if (defined(ARCH_CPU_X86_64) || defined(ARCH_CPU_ARM_FAMILY)) && \
++#if (defined(ARCH_CPU_X86_64) || defined(ARCH_CPU_ARM_FAMILY) || \
++    defined(ARCH_CPU_PPC64_FAMILY)) && \
+     !defined(MEMORY_SANITIZER)
+   // Use CLONE_VM | CLONE_VFORK as an optimization to avoid copying page tables.
+   // Since clone writes to the new child's TLS before returning, we must set a
+@@ -104,6 +105,11 @@ bool ChrootToSafeEmptyDir() {
+   // glibc performs syscalls by calling a function pointer in TLS, so we do not
+   // attempt this optimization.
+   // TODO(crbug.com/40196869) Broken in MSan builds after LLVM f1bb30a4956f.
++  //
++  // NOTE: Without CLONE_VM, fontconfig will attempt to reload configuration
++  // in every thread.  Since the rendered threads are sandboxed without
++  // filesystem access (e.g. to /etc/fonts/fonts.conf) this will cause font
++  // configuration loading failures and no fonts will be displayed!
+   clone_flags |= CLONE_VM | CLONE_VFORK | CLONE_SETTLS;
+ 
+   char tls_buf[PTHREAD_STACK_MIN_CONST] = {};
+diff -up chromium-141.0.7390.37/sandbox/linux/services/syscall_wrappers.cc.0001-sandbox-Enable-seccomp_bpf-for-ppc64 chromium-141.0.7390.37/sandbox/linux/services/syscall_wrappers.cc
+--- chromium-141.0.7390.37/sandbox/linux/services/syscall_wrappers.cc.0001-sandbox-Enable-seccomp_bpf-for-ppc64	2025-09-23 22:21:14.000000000 +0200
++++ chromium-141.0.7390.37/sandbox/linux/services/syscall_wrappers.cc	2025-09-28 10:15:55.416648236 +0200
+@@ -68,7 +68,7 @@ long sys_clone(unsigned long flags,
+ #if defined(ARCH_CPU_X86_64)
+   return syscall(__NR_clone, flags, child_stack, ptid, ctid, tls);
+ #elif defined(ARCH_CPU_X86) || defined(ARCH_CPU_ARM_FAMILY) || \
+-    defined(ARCH_CPU_MIPS_FAMILY)
++    defined(ARCH_CPU_MIPS_FAMILY) || defined(ARCH_CPU_PPC64_FAMILY)
+   // CONFIG_CLONE_BACKWARDS defined.
+   return syscall(__NR_clone, flags, child_stack, ptid, tls, ctid);
  #endif
+diff -up chromium-141.0.7390.37/sandbox/linux/syscall_broker/broker_process.cc.0001-sandbox-Enable-seccomp_bpf-for-ppc64 chromium-141.0.7390.37/sandbox/linux/syscall_broker/broker_process.cc
+--- chromium-141.0.7390.37/sandbox/linux/syscall_broker/broker_process.cc.0001-sandbox-Enable-seccomp_bpf-for-ppc64	2025-09-23 22:21:14.000000000 +0200
++++ chromium-141.0.7390.37/sandbox/linux/syscall_broker/broker_process.cc	2025-09-28 10:15:55.415563066 +0200
+@@ -167,7 +167,7 @@ bool BrokerProcess::IsSyscallBrokerable(
+ #if defined(__NR_fstatat64)
+     case __NR_fstatat64:
+ #endif
+-#if defined(__x86_64__) || defined(__aarch64__)
++#if defined(__x86_64__) || defined(__aarch64__) || defined(__powerpc64__)
+     case __NR_newfstatat:
+ #endif
+       return !fast_check || policy_->allowed_command_set.test(COMMAND_STAT);
+diff -up chromium-141.0.7390.37/sandbox/linux/system_headers/linux_seccomp.h.0001-sandbox-Enable-seccomp_bpf-for-ppc64 chromium-141.0.7390.37/sandbox/linux/system_headers/linux_seccomp.h
+--- chromium-141.0.7390.37/sandbox/linux/system_headers/linux_seccomp.h.0001-sandbox-Enable-seccomp_bpf-for-ppc64	2025-09-23 22:21:14.000000000 +0200
++++ chromium-141.0.7390.37/sandbox/linux/system_headers/linux_seccomp.h	2025-09-28 10:15:55.416845160 +0200
+@@ -38,6 +38,9 @@
+ #ifndef EM_AARCH64
+ #define EM_AARCH64 183
+ #endif
++#ifndef EM_PPC64
++#define EM_PPC64 21
 +#endif
  
- #if defined(LIBC_GLIBC) && !BUILDFLAG(IS_CHROMEOS)
- BPF_TEST_C(BaselinePolicy, FutexEINVAL, BaselinePolicy) {
-Index: chromium-140.0.7339.41/sandbox/linux/system_headers/linux_stat.h
-===================================================================
---- chromium-140.0.7339.41.orig/sandbox/linux/system_headers/linux_stat.h
-+++ chromium-140.0.7339.41/sandbox/linux/system_headers/linux_stat.h
+ #ifndef __AUDIT_ARCH_64BIT
+ #define __AUDIT_ARCH_64BIT 0x80000000
+@@ -70,6 +73,12 @@
+ #ifndef AUDIT_ARCH_AARCH64
+ #define AUDIT_ARCH_AARCH64 (EM_AARCH64 | __AUDIT_ARCH_64BIT | __AUDIT_ARCH_LE)
+ #endif
++#ifndef AUDIT_ARCH_PPC64
++#define AUDIT_ARCH_PPC64 (EM_PPC64 | __AUDIT_ARCH_64BIT)
++#endif
++#ifndef AUDIT_ARCH_PPC64LE
++#define AUDIT_ARCH_PPC64LE (EM_PPC64 | __AUDIT_ARCH_64BIT | __AUDIT_ARCH_LE)
++#endif
+ 
+ // For prctl.h
+ #ifndef PR_SET_SECCOMP
+diff -up chromium-141.0.7390.37/sandbox/linux/system_headers/linux_signal.h.0001-sandbox-Enable-seccomp_bpf-for-ppc64 chromium-141.0.7390.37/sandbox/linux/system_headers/linux_signal.h
+--- chromium-141.0.7390.37/sandbox/linux/system_headers/linux_signal.h.0001-sandbox-Enable-seccomp_bpf-for-ppc64	2025-09-23 22:21:14.000000000 +0200
++++ chromium-141.0.7390.37/sandbox/linux/system_headers/linux_signal.h	2025-09-28 10:15:55.416926335 +0200
+@@ -13,7 +13,7 @@
+ // (not undefined, but defined different values and in different memory
+ // layouts). So, fill the gap here.
+ #if defined(__i386__) || defined(__x86_64__) || defined(__arm__) || \
+-    defined(__aarch64__)
++    defined(__aarch64__) || defined(__powerpc64__)
+ 
+ #define LINUX_SIGHUP 1
+ #define LINUX_SIGINT 2
+diff -up chromium-141.0.7390.37/sandbox/linux/system_headers/linux_stat.h.0001-sandbox-Enable-seccomp_bpf-for-ppc64 chromium-141.0.7390.37/sandbox/linux/system_headers/linux_stat.h
+--- chromium-141.0.7390.37/sandbox/linux/system_headers/linux_stat.h.0001-sandbox-Enable-seccomp_bpf-for-ppc64	2025-09-23 22:21:14.000000000 +0200
++++ chromium-141.0.7390.37/sandbox/linux/system_headers/linux_stat.h	2025-09-28 10:15:55.417253506 +0200
 @@ -173,6 +173,28 @@ struct kernel_stat {
    unsigned int __unused4;
    unsigned int __unused5;
@@ -1100,45 +1052,91 @@ Index: chromium-140.0.7339.41/sandbox/linux/system_headers/linux_stat.h
  #endif
  
  #if !defined(AT_EMPTY_PATH)
-Index: chromium-140.0.7339.41/sandbox/linux/services/credentials.cc
-===================================================================
---- chromium-140.0.7339.41.orig/sandbox/linux/services/credentials.cc
-+++ chromium-140.0.7339.41/sandbox/linux/services/credentials.cc
-@@ -90,7 +90,7 @@ bool ChrootToSafeEmptyDir() {
-   alignas(16) char stack_buf[PTHREAD_STACK_MIN_CONST];
+diff -up chromium-141.0.7390.37/sandbox/linux/system_headers/linux_syscalls.h.0001-sandbox-Enable-seccomp_bpf-for-ppc64 chromium-141.0.7390.37/sandbox/linux/system_headers/linux_syscalls.h
+--- chromium-141.0.7390.37/sandbox/linux/system_headers/linux_syscalls.h.0001-sandbox-Enable-seccomp_bpf-for-ppc64	2025-09-23 22:21:14.000000000 +0200
++++ chromium-141.0.7390.37/sandbox/linux/system_headers/linux_syscalls.h	2025-09-28 10:15:55.415341084 +0200
+@@ -35,5 +35,9 @@
+ #include "sandbox/linux/system_headers/arm64_linux_syscalls.h"
+ #endif
  
- #if defined(ARCH_CPU_X86_FAMILY) || defined(ARCH_CPU_ARM_FAMILY) || \
--    defined(ARCH_CPU_MIPS_FAMILY)
-+    defined(ARCH_CPU_MIPS_FAMILY) || defined(ARCH_CPU_PPC64_FAMILY)
-   // The stack grows downward.
-   void* stack = stack_buf + sizeof(stack_buf);
- #else
-@@ -99,7 +99,8 @@ bool ChrootToSafeEmptyDir() {
++#if defined(__powerpc64__)
++#include "sandbox/linux/system_headers/ppc64_linux_syscalls.h"
++#endif
++
+ #endif  // SANDBOX_LINUX_SYSTEM_HEADERS_LINUX_SYSCALLS_H_
  
-   int clone_flags = CLONE_FS | LINUX_SIGCHLD;
-   void* tls = nullptr;
--#if (defined(ARCH_CPU_X86_64) || defined(ARCH_CPU_ARM_FAMILY)) && \
-+#if (defined(ARCH_CPU_X86_64) || defined(ARCH_CPU_ARM_FAMILY) || \
-+    defined(ARCH_CPU_PPC64_FAMILY)) && \
-     !defined(MEMORY_SANITIZER)
-   // Use CLONE_VM | CLONE_VFORK as an optimization to avoid copying page tables.
-   // Since clone writes to the new child's TLS before returning, we must set a
-@@ -107,6 +108,11 @@ bool ChrootToSafeEmptyDir() {
-   // glibc performs syscalls by calling a function pointer in TLS, so we do not
-   // attempt this optimization.
-   // TODO(crbug.com/40196869) Broken in MSan builds after LLVM f1bb30a4956f.
-+  //
-+  // NOTE: Without CLONE_VM, fontconfig will attempt to reload configuration
-+  // in every thread.  Since the rendered threads are sandboxed without
-+  // filesystem access (e.g. to /etc/fonts/fonts.conf) this will cause font
-+  // configuration loading failures and no fonts will be displayed!
-   clone_flags |= CLONE_VM | CLONE_VFORK | CLONE_SETTLS;
+diff -up chromium-141.0.7390.37/sandbox/linux/system_headers/ppc64_linux_syscalls.h.0001-sandbox-Enable-seccomp_bpf-for-ppc64 chromium-141.0.7390.37/sandbox/linux/system_headers/ppc64_linux_syscalls.h
+--- chromium-141.0.7390.37/sandbox/linux/system_headers/ppc64_linux_syscalls.h.0001-sandbox-Enable-seccomp_bpf-for-ppc64	2025-09-28 10:15:55.415404074 +0200
++++ chromium-141.0.7390.37/sandbox/linux/system_headers/ppc64_linux_syscalls.h	2025-09-28 10:15:55.415404074 +0200
+@@ -0,0 +1,25 @@
++// Copyright 2014 The Chromium Authors. All rights reserved.
++// Use of this source code is governed by a BSD-style license that can be
++// found in the LICENSE file.
++
++#ifndef SANDBOX_LINUX_SYSTEM_HEADERS_PPC64_LINUX_SYSCALLS_H_
++#define SANDBOX_LINUX_SYSTEM_HEADERS_PPC64_LINUX_SYSCALLS_H_
++
++#include <asm/unistd.h>
++
++//TODO: is it necessary to redefine syscall numbers for PPC64?
++// Needed for Ubuntu/Debian/Centos/RHEL:
++#if !defined(__NR_shmget)
++#define __NR_shmget     395
++#endif
++#if !defined(__NR_shmdt)
++#define __NR_shmdt      398
++#endif
++#if !defined(__NR_shmctl)
++#define __NR_shmctl     396
++#endif
++#if !defined(__NR_shmat)
++#define __NR_shmat      397
++#endif
++
++#endif  // SANDBOX_LINUX_SYSTEM_HEADERS_PPC64_LINUX_SYSCALLS_H_
+diff -up chromium-141.0.7390.37/sandbox/linux/system_headers/ppc64_linux_ucontext.h.0001-sandbox-Enable-seccomp_bpf-for-ppc64 chromium-141.0.7390.37/sandbox/linux/system_headers/ppc64_linux_ucontext.h
+--- chromium-141.0.7390.37/sandbox/linux/system_headers/ppc64_linux_ucontext.h.0001-sandbox-Enable-seccomp_bpf-for-ppc64	2025-09-28 10:15:55.415474818 +0200
++++ chromium-141.0.7390.37/sandbox/linux/system_headers/ppc64_linux_ucontext.h	2025-09-28 10:15:55.415474818 +0200
+@@ -0,0 +1,12 @@
++// Copyright 2014 The Chromium Authors. All rights reserved.
++// Use of this source code is governed by a BSD-style license that can be
++// found in the LICENSE file.
++
++#ifndef SANDBOX_LINUX_SYSTEM_HEADERS_PPC64_LINUX_UCONTEXT_H_
++#define SANDBOX_LINUX_SYSTEM_HEADERS_PPC64_LINUX_UCONTEXT_H_
++
++#include <sys/ucontext.h>
++
++//TODO: is it necessary to redefine ucontext on PPC64?
++
++#endif  // SANDBOX_LINUX_SYSTEM_HEADERS_PPC64_LINUX_UCONTEXT_H_
+diff -up chromium-141.0.7390.37/sandbox/policy/linux/bpf_renderer_policy_linux.cc.0001-sandbox-Enable-seccomp_bpf-for-ppc64 chromium-141.0.7390.37/sandbox/policy/linux/bpf_renderer_policy_linux.cc
+--- chromium-141.0.7390.37/sandbox/policy/linux/bpf_renderer_policy_linux.cc.0001-sandbox-Enable-seccomp_bpf-for-ppc64	2025-09-23 22:21:14.000000000 +0200
++++ chromium-141.0.7390.37/sandbox/policy/linux/bpf_renderer_policy_linux.cc	2025-09-28 10:15:55.415005076 +0200
+@@ -17,6 +17,11 @@
+ #include "sandbox/linux/system_headers/linux_syscalls.h"
+ #include "sandbox/policy/linux/sandbox_linux.h"
  
-   char tls_buf[PTHREAD_STACK_MIN_CONST] = {};
-Index: chromium-140.0.7339.41/sandbox/policy/linux/bpf_utility_policy_linux.cc
-===================================================================
---- chromium-140.0.7339.41.orig/sandbox/policy/linux/bpf_utility_policy_linux.cc
-+++ chromium-140.0.7339.41/sandbox/policy/linux/bpf_utility_policy_linux.cc
++// On PPC64, TCGETS is defined in terms of struct termios, so we must include termios.h
++#ifdef __powerpc64__
++#include <termios.h>
++#endif
++
+ // TODO(vignatti): replace the local definitions below with #include
+ // <linux/dma-buf.h> once kernel version 4.6 becomes widely used.
+ #include <linux/types.h>
+@@ -86,7 +91,7 @@ ResultExpr RendererProcessPolicy::Evalua
+     case __NR_ftruncate64:
+ #endif
+ #if defined(__i386__) || defined(__x86_64__) || defined(__mips__) || \
+-    defined(__aarch64__)
++    defined(__aarch64__) || defined(__powerpc64__)
+     case __NR_getrlimit:
+     case __NR_setrlimit:
+ // We allow setrlimit to dynamically adjust the address space limit as
+diff -up chromium-141.0.7390.37/sandbox/policy/linux/bpf_utility_policy_linux.cc.0001-sandbox-Enable-seccomp_bpf-for-ppc64 chromium-141.0.7390.37/sandbox/policy/linux/bpf_utility_policy_linux.cc
+--- chromium-141.0.7390.37/sandbox/policy/linux/bpf_utility_policy_linux.cc.0001-sandbox-Enable-seccomp_bpf-for-ppc64	2025-09-23 22:21:14.000000000 +0200
++++ chromium-141.0.7390.37/sandbox/policy/linux/bpf_utility_policy_linux.cc	2025-09-28 10:15:55.417510624 +0200
 @@ -34,7 +34,7 @@ ResultExpr UtilityProcessPolicy::Evaluat
      case __NR_fdatasync:
      case __NR_fsync:
@@ -1148,25 +1146,3 @@ Index: chromium-140.0.7339.41/sandbox/policy/linux/bpf_utility_policy_linux.cc
      case __NR_getrlimit:
  #endif
  #if defined(__i386__) || defined(__arm__)
-Index: chromium-140.0.7339.41/sandbox/linux/seccomp-bpf-helpers/sigsys_handlers.cc
-===================================================================
---- chromium-140.0.7339.41.orig/sandbox/linux/seccomp-bpf-helpers/sigsys_handlers.cc
-+++ chromium-140.0.7339.41/sandbox/linux/seccomp-bpf-helpers/sigsys_handlers.cc
-@@ -389,7 +389,16 @@ intptr_t SIGSYSFstatatHandler(const stru
-   if (args.nr == __NR_fstatat_default) {
-     if (*reinterpret_cast<const char*>(args.args[1]) == '\0' &&
-         args.args[3] == static_cast<uint64_t>(AT_EMPTY_PATH)) {
--      return syscall(__NR_fstat_default, static_cast<int>(args.args[0]),
-+          int fd = static_cast<int>(args.args[0]);
-+#if defined(__powerpc64__)
-+      // On ppc64+glibc, some syscalls seem to accidentally negate the first
-+      // parameter which causes checks against it to fail. For now, manually
-+      // negate them back.
-+      // TODO: Investigate the root cause and fix in glibc
-+      if (fd < 0)
-+        fd = -fd;
-+#endif
-+      return syscall(__NR_fstat_default, fd,
-                      reinterpret_cast<default_stat_struct*>(args.args[2]));
-     }
-     return -reinterpret_cast<intptr_t>(fs_denied_errno);
