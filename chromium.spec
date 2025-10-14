@@ -236,7 +236,7 @@
 %if %{userestrictedapikeys}
 %global default_client_id 449907151817.apps.googleusercontent.com
 %global default_client_secret miEreAep8nuvTdvLums6qyLK
-%global chromoting_client_id 449907151817-8vnlfih032ni8c4jjps9int9t86k546t.apps.googleusercontent.com 
+%global chromoting_client_id 449907151817-8vnlfih032ni8c4jjps9int9t86k546t.apps.googleusercontent.com
 %else
 %global default_client_id %nil
 %global default_client_secret %nil
@@ -253,11 +253,14 @@ License: BSD-3-Clause AND LGPL-2.1-or-later AND Apache-2.0 AND IJG AND MIT AND G
 # Use /etc/chromium for initial_prefs
 Patch1: chromium-115-initial_prefs-etc-path.patch
 
+# Manifest v2
+Patch2: extensions-manifestv2.patch
+
 # Try to load widevine from other places
 Patch8: chromium-117-widevine-other-locations.patch
 
 # debian patches
-# disable font-test 
+# disable font-test
 Patch20: chromium-disable-font-tests.patch
 # don't download binary blob
 Patch21: chromium-123-screen-ai-service.patch
@@ -791,7 +794,7 @@ Provides: bundled(boringssl)
 %if %{bundlebrotli}
 Provides: bundled(brotli) = 222564a95d9ab58865a096b8d9f7324ea5f2e03e
 %endif
-%if %{bundlesimdutf} 
+%if %{bundlesimdutf}
 Provides: bundled(simdutf) = 7.0.0
 %endif
 Provides: bundled(bspatch) = 465265d0d473d107b76e74d969199eaf2cdc8750
@@ -928,7 +931,7 @@ Requires: chromium-common%{_isa} = %{version}-%{release}
 
 %description headless
 A minimal headless client built from Chromium. headless_shell is built
-without support for alsa, cups, dbus, gconf, gio, kerberos, pulseaudio, or 
+without support for alsa, cups, dbus, gconf, gio, kerberos, pulseaudio, or
 udev.
 
 %package qt5-ui
@@ -950,6 +953,7 @@ Qt6 UI for chromium.
 
 ### Chromium Fedora Patches ###
 %patch -P1 -p1 -b .etc
+%patch -P2 -p1 -b .manifestv2
 %patch -P8 -p1 -b .widevine-other-locations
 
 %patch -P20 -p1 -b .disable-font-test
@@ -1109,7 +1113,7 @@ rm -rf third_party/devtools-frontend/src/third_party/esbuild
 # Remove bundle gn and replace it with a system gn or bootstrap gn as it is x86_64 and causes
 # FTBFS on other arch like aarch64/ppc64le
 %if %{bootstrap}
-ln -sf ../../%{chromebuilddir}/gn buildtools/linux64/gn 
+ln -sf ../../%{chromebuilddir}/gn buildtools/linux64/gn
 %else
 ln -sf $(which gn) buildtools/linux64/gn
 %endif
@@ -1308,7 +1312,7 @@ CHROMIUM_BROWSER_GN_DEFINES+=' use_vaapi=true'
 CHROMIUM_BROWSER_GN_DEFINES+=' use_vaapi=false'
 %endif
 
-%if %{use_v4l2_codec} 
+%if %{use_v4l2_codec}
 CHROMIUM_BROWSER_GN_DEFINES+=' use_v4l2_codec=true'
 %endif
 
@@ -1337,7 +1341,7 @@ CHROMIUM_BROWSER_GN_DEFINES+=' use_system_lcms2=true'
 %if ! %{bundlelibtiff}
 CHROMIUM_BROWSER_GN_DEFINES+=' use_system_libtiff=true'
 %endif
- 
+
 CHROMIUM_BROWSER_GN_DEFINES+=' use_system_libffi=true'
 
 export CHROMIUM_BROWSER_GN_DEFINES
@@ -1833,7 +1837,7 @@ fi
 
 * Tue Jul 01 2025 Than Ngo <than@redhat.com> - 138.0.7204.92-1
 - Update to 138.0.7204.92
-  * High CVE-2025-6554: Type Confusion in V8 
+  * High CVE-2025-6554: Type Confusion in V8
 
 * Tue Jun 24 2025 Than Ngo <than@redhat.com> - 138.0.7204.49-1
 - Update to 138.0.7204.49
@@ -2188,7 +2192,7 @@ fi
   * High CVE-2024-6290: Use after free in Dawn
   * High CVE-2024-6291: Use after free in Swiftshader
   * High CVE-2024-6292: Use after free in Dawn
-  * High CVE-2024-6293: Use after free in Dawn 
+  * High CVE-2024-6293: Use after free in Dawn
 
 * Wed Jun 19 2024 Than Ngo <than@redhat.com> - 126.0.6478.114-1
 - update to 126.0.6478.114
@@ -2468,7 +2472,7 @@ fi
 - fixed bz#2252874, built with control flow integrity (CFI) support
 
 * Sat Dec 02 2023 Than Ngo <than@redhat.com> - 120.0.6099.56-1
-- update to 120.0.6099.56 
+- update to 120.0.6099.56
 - enable qt6 UI backend
 
 * Sat Dec 02 2023 Than Ngo <than@redhat.com> - 119.0.6045.199-2
@@ -2491,7 +2495,7 @@ fi
 - skip clang's patches for epel8 that now gets clang-16 update
 
 * Mon Nov 13 2023 Than Ngo <than@redhat.com> - 119.0.6045.123-2
-- fixed bz#2240127, Some h.264 mp4s do not play 
+- fixed bz#2240127, Some h.264 mp4s do not play
 
 * Wed Nov 08 2023 Than Ngo <than@redhat.com> - 119.0.6045.123-1
 - update to 119.0.6045.123, include following security fixes:
@@ -2542,14 +2546,14 @@ fi
 - fix CVE-2023-5346: Type Confusion in V8
 
 * Fri Sep 29 2023 Than Ngo <than@redhat.com> - 117.0.5938.132-2
-- add workaround for the crash on BTI capable system 
+- add workaround for the crash on BTI capable system
 
 * Thu Sep 28 2023 Than Ngo <than@redhat.com> - 117.0.5938.132-1
 - update to 117.0.5938.132
 - CVE-2023-5217, heap buffer overflow in vp8 encoding in libvpx.
 - CVE-2023-5186, use after free in Passwords.
 - CVE-2023-5187, use after free in Extensions.
-￼	
+￼
 * Sat Sep 23 2023 Than Ngo <than@redhat.com> - 117.0.5938.92-2
 - backport upstream patch to fix memory leak
 
@@ -2569,7 +2573,7 @@ fi
 - update to 116.0.5845.179
 
 * Tue Aug 15 2023 Than Ngo <than@redhat.com> - 116.0.5845.96-1
-- update to 116.0.5845.96 
+- update to 116.0.5845.96
 
 * Wed Aug 09 2023 Than Ngo <than@redhat.com> - 115.0.5790.170-2
 - set use_all_cpus=1 for aarch64
@@ -2590,7 +2594,7 @@ fi
 - update to 114.0.5735.198
 
 * Wed Jun 14 2023 Than Ngo <than@redhat.com> - 114.0.5735.133-1
-- update to 114.0.5735.133 
+- update to 114.0.5735.133
 - Enable AllowQt feature flag
 - Fix Qt deps
 - Fix Qt logical scale factor
