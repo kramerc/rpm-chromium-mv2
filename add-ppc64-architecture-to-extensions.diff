@@ -1,21 +1,21 @@
-Index: chromium-140.0.7339.41/chrome/browser/extensions/api/runtime/chrome_runtime_api_delegate.cc
+Index: chromium-142.0.7444.52/chrome/browser/extensions/api/runtime/chrome_runtime_api_delegate.cc
 ===================================================================
---- chromium-140.0.7339.41.orig/chrome/browser/extensions/api/runtime/chrome_runtime_api_delegate.cc
-+++ chromium-140.0.7339.41/chrome/browser/extensions/api/runtime/chrome_runtime_api_delegate.cc
-@@ -378,6 +378,8 @@ bool ChromeRuntimeAPIDelegate::GetPlatfo
+--- chromium-142.0.7444.52.orig/chrome/browser/extensions/api/runtime/chrome_runtime_api_delegate.cc
++++ chromium-142.0.7444.52/chrome/browser/extensions/api/runtime/chrome_runtime_api_delegate.cc
+@@ -383,6 +383,8 @@ bool ChromeRuntimeAPIDelegate::GetPlatfo
      info->arch = extensions::api::runtime::PlatformArch::kMips64;
-   } else if (strcmp(arch, "riscv64") == 0) {
+   } else if (arch == "riscv64") {
      info->arch = extensions::api::runtime::PlatformArch::kRiscv64;
-+  } else if (strcmp(arch, "ppc64") == 0) {
++  } else if (arch == "ppc64") {
 +    info->arch = extensions::api::runtime::PlatformArch::kPpc64;
    } else {
      NOTREACHED();
    }
-Index: chromium-140.0.7339.41/extensions/common/api/runtime.json
+Index: chromium-142.0.7444.52/extensions/common/api/runtime.json
 ===================================================================
---- chromium-140.0.7339.41.orig/extensions/common/api/runtime.json
-+++ chromium-140.0.7339.41/extensions/common/api/runtime.json
-@@ -99,7 +99,8 @@
+--- chromium-142.0.7444.52.orig/extensions/common/api/runtime.json
++++ chromium-142.0.7444.52/extensions/common/api/runtime.json
+@@ -98,7 +98,8 @@
              {"name": "x86-64", "description": "Specifies the processer architecture as x86-64."},
              {"name": "mips", "description": "Specifies the processer architecture as mips."},
              {"name": "mips64", "description": "Specifies the processer architecture as mips64."},
@@ -25,7 +25,7 @@ Index: chromium-140.0.7339.41/extensions/common/api/runtime.json
           ],
          "description": "The machine's processor architecture."
        },
-@@ -112,7 +113,8 @@
+@@ -111,7 +112,8 @@
            {"name": "x86-32", "description": "Specifies the native client architecture as x86-32."},
            {"name": "x86-64", "description": "Specifies the native client architecture as x86-64."},
            {"name": "mips", "description": "Specifies the native client architecture as mips."},
