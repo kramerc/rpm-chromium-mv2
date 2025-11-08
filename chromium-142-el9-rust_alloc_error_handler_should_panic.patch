@@ -1,0 +1,20 @@
+Fix FTBFS due to old rust compiler on EL9
+
+error: undefined symbol: __rust_alloc_error_handler_should_panic
+
+
+diff -up chromium-142.0.7444.52/build/rust/allocator/lib.rs.me chromium-142.0.7444.52/build/rust/allocator/lib.rs
+--- chromium-142.0.7444.52/build/rust/allocator/lib.rs.me	2025-10-31 12:29:40.849457901 +0100
++++ chromium-142.0.7444.52/build/rust/allocator/lib.rs	2025-10-31 12:30:37.753590615 +0100
+@@ -101,6 +101,11 @@ mod both_allocators {
+     #[linkage = "weak"]
+     static __rust_no_alloc_shim_is_unstable: u8 = 0;
+ 
++    // Mangle the symbol name as rustc (1.84) expects on EL9
++    #[no_mangle]
++    #[linkage = "weak"]
++    static __rust_alloc_error_handler_should_panic: u8 = 0;
++
+     // Mangle the symbol name as rustc expects.
+     #[rustc_std_internal_symbol]
+     #[allow(non_upper_case_globals)]

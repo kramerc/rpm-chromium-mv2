@@ -244,7 +244,7 @@
 %endif
 
 Name:	chromium
-Version: 141.0.7390.76
+Version: 142.0.7444.134
 Release: 1%{?dist}
 Summary: A WebKit (Blink) powered web browser that Google doesn't want you to use
 Url: http://www.chromium.org/Home
@@ -269,7 +269,7 @@ Patch21: chromium-123-screen-ai-service.patch
 Patch82: chromium-98.0.4758.102-remoting-no-tests.patch
 
 # patch for using system brotli
-Patch89: chromium-136-system-brotli.patch
+Patch89: chromium-142-system-brotli.patch
 
 # patch for using system libxml
 Patch90: chromium-121-system-libxml.patch
@@ -286,17 +286,30 @@ Patch93: chromium-141-csss_style_sheet.patch
 # Revert due to incorrect display of links on startpage in Darkmode
 Patch94: chromium-141-revert-remove-darkmode-image-policy.patch
 
+# FTBFS - fatal error: 'gpu/webgpu/dawn_commit_hash.h' file not found
+Patch95: chromium-142-dawn-commit-hash.patch
+
+# FTBFS - error: cannot find attribute `sanitize` in this scope
+#    --> ../../third_party/crabbyavif/src/src/capi/io.rs:210:41
+#     |
+# 210 |     #[cfg_attr(feature = "disable_cfi", sanitize(cfi = "off"))]
+Patch96: chromium-142-crabbyavif-ftbfs-old-rust.patch
+
+# FTBFS - /usr/include/bits/siginfo-consts.h:219:3: error: expected identifier
+# 219 |   SYS_SECCOMP = 1,              /* Seccomp triggered.  */
+Patch97: chromium-141-glibc-2.42-SYS_SECCOMP.patch
+
 # system ffmpeg
 # need for old ffmpeg 5.x on epel9
 Patch128: chromium-138-el9-ffmpeg-deprecated-apis.patch
 Patch129: chromium-el9-ffmpeg-AV_CODEC_FLAG_COPY_OPAQUE.patch
-Patch130: chromium-141-el9-ffmpeg-5.x-duration.patch
+Patch130: chromium-142-el9-ffmpeg-5.x-duration.patch
 # disable the check
 Patch131: chromium-107-proprietary-codecs.patch
 # fix tab crash with SIGTRAP error when using system ffmpeg
 Patch132: chromium-118-sigtrap_system_ffmpeg.patch
 # need for old ffmpeg 6.0/5.x on epel9 and fedora < 40
-Patch133: chromium-139-el9-ffmpeg-5.1.x.patch
+Patch133: chromium-142-el9-ffmpeg-5.1.x.patch
 # revert, it causes build error: use of undeclared identifier 'AVFMT_FLAG_NOH264PARSE'
 Patch135: chromium-133-disable-H.264-video-parser-during-demuxing.patch
 # Workaround for youtube stop working
@@ -304,6 +317,9 @@ Patch136: chromium-133-workaround-system-ffmpeg-whitelist.patch
 
 # file conflict with old kernel on el8/el9
 Patch141: chromium-118-dma_buf_export_sync_file-conflict.patch
+
+#  fix ftbfs caused by old python-3.9 on el8
+Patch142: chromium-142-python-3.9-ftbfs.patch
 
 # add correct path for Qt6Gui header and libs
 Patch150: chromium-124-qt6.patch
@@ -331,6 +347,10 @@ Patch311: chromium-rust-no-alloc-shim-is-unstable.patch
 # enable fstack-protector-strong
 Patch312: chromium-123-fstack-protector-strong.patch
 
+# Fix FTBFS on EL9
+# - error: undefined symbol: __rust_alloc_error_handler_should_panic
+Patch313: chromium-142-el9-rust_alloc_error_handler_should_panic.patch
+
 # old rust version causes build error on el8:
 # error[E0599]: no method named `is_none_or` found for enum `Option` in the current scope
 Patch314: chromium-136-rust-skrifa-build-error.patch
@@ -343,7 +363,7 @@ Patch315: chromium-134-rust-libadler2.patch
 Patch316: chromium-122-clang-build-flags.patch
 
 # unknown warning option -Wno-nontrivial-memcall
-Patch317: chromium-138-clang++-unknown-argument.patch
+Patch317: chromium-142-clang++-unknown-argument.patch
 
 # Workaround for https://bugzilla.redhat.com/show_bug.cgi?id=2239523
 # https://bugs.chromium.org/p/chromium/issues/detail?id=1145581#c60
@@ -354,7 +374,7 @@ Patch352: chromium-117-workaround_for_crash_on_BTI_capable_system.patch
 Patch353: chromium-127-aarch64-duplicate-case-value.patch
 
 # remove flag split-threshold-for-reg-with-hint, it's not supported in clang <= 17
-Patch354: chromium-126-split-threshold-for-reg-with-hint.patch
+Patch354: chromium-142-split-threshold-for-reg-with-hint.patch
 
 # fix build error: no member named 'hardware_destructive_interference_size' in namespace 'std'
 Patch355: chromium-130-hardware_destructive_interference_size.patch
@@ -390,7 +410,6 @@ Patch384: Rtc_base-system-arch.h-PPC.patch
 Patch386: 0004-third_party-crashpad-port-curl-transport-ppc64.patch
 
 Patch387: HACK-third_party-libvpx-use-generic-gnu.patch
-Patch388: 0001-third-party-hwy-wrong-include.patch
 Patch389: HACK-debian-clang-disable-base-musttail.patch
 Patch390: HACK-debian-clang-disable-pa-musttail.patch
 Patch391: 0001-Add-ppc64-target-to-libaom.patch
@@ -443,6 +462,10 @@ Patch511: 0002-Fix-Missing-OPENSSL_NO_ENGINE-Guard.patch
 %endif
 
 # upstream patches
+# Fix FTBFS
+# ../../base/containers/span.h:1387:63: error: arithmetic on a pointer to an incomplete type 'element_type' (aka 'const autofill::FormFieldData')
+# 1387 |         typename iterator::AssumeValid(data(), data(), data() + size())));
+Patch1000: chromium-142-missing-include-for-form_field_data.patch
 
 # Use chromium-latest.py to generate clean tarball from released build tarballs, found here:
 # http://build.chromium.org/buildbot/official/
@@ -978,12 +1001,18 @@ Qt6 UI for chromium.
 %patch -P92 -p1 -b .nodejs-checkversion
 %patch -P93 -p1 -b .ftbfs-csss_style_sheet
 %patch -P94 -p1 -R -b .revert-remove-darkmode-image-policy
+%patch -P95 -p1 -b .dawn-commit-hash
+%patch -P96 -p1 -b .crabbyavif-ftbfs-old-rust
+
+%if 0%{?fedora} > 43
+%patch -P97 -p1 -b .glibc-2.42-SYS_SECCOMP
+%endif
 
 %if ! %{bundleffmpegfree}
 %if 0%{?rhel} == 9
 %patch -P128 -p1 -b .el9-ffmpeg-deprecated-apis
 %patch -P129 -p1 -b .el9-ffmpeg-AV_CODEC_FLAG_COPY_OPAQUE
-%patch -P130 -p1 -b .ffmpeg-5.x-duration
+%patch -P130 -p1 -b .el9-ffmpeg-5.x-duration
 %patch -P133 -p1 -b .el9-ffmpeg-5.1.x
 %endif
 %patch -P131 -p1 -b .prop-codecs
@@ -994,6 +1023,7 @@ Qt6 UI for chromium.
 
 %if 0%{?rhel} == 8 || 0%{?rhel} == 9
 %patch -P141 -p1 -b .dma_buf_export_sync_file-conflict
+%patch -P142 -p1 -b .python-3.9-ftbfs
 %endif
 
 %patch -P150 -p1 -b .qt6
@@ -1016,6 +1046,7 @@ Qt6 UI for chromium.
 %patch -P310 -p1 -b .rust-FTBFS-suppress-warnings
 %patch -P311 -p1 -b .rust-no-alloc-shim-is-unstable
 %patch -P312 -p1 -b .fstack-protector-strong
+%patch -P313 -p1 -b .el9-rust_alloc_error_handler_should_panic
 
 %if 0%{?rhel} && 0%{?rhel} < 10
 %patch -P315 -p1 -b .rust-libadler2
@@ -1056,7 +1087,6 @@ Qt6 UI for chromium.
 %patch -P384 -p1 -b .Rtc_base-system-arch.h-PPC
 %patch -P386 -p1 -b .0004-third_party-crashpad-port-curl-transport-ppc64
 %patch -P387 -p1 -b .HACK-third_party-libvpx-use-generic-gnu
-%patch -P388 -p1 -b .0001-third-party-hwy-wrong-include.patch
 %patch -P389 -p1 -b .HACK-debian-clang-disable-base-musttail
 %patch -P390 -p1 -b .HACK-debian-clang-disable-pa-musttail
 %patch -P391 -p1 -b .0001-Add-ppc64-target-to-libaom
@@ -1094,6 +1124,7 @@ Qt6 UI for chromium.
 %endif
 
 # Upstream patches
+%patch -P1000 -p1 -b .missing-include-for-form_field_data.patch
 
 # Change shebang in all relevant files in this directory and all subdirectories
 # See `man find` for how the `-exec command {} +` syntax works
@@ -1725,6 +1756,57 @@ fi
 %endif
 
 %changelog
+* Thu Nov 06 2025 Than Ngo <than@redhat.com> - 142.0.7444.134-1
+- Update to 142.0.7444.134
+  * High CVE-2025-12725: Out of bounds write in WebGPU
+  * High CVE-2025-12726: Inappropriate implementation in Views
+  * High CVE-2025-12727: Inappropriate implementation in V8
+  * Medium CVE-2025-12728: Inappropriate implementation in Omnibox
+  * Medium CVE-2025-12729: Inappropriate implementation in Omnibox
+
+* Wed Nov 05 2025 Dominik Mierzejewski <dominik@greysector.net> - 142.0.7444.59-2
+- Rebuilt for FFmpeg 8
+
+* Thu Oct 30 2025 Than Ngo <than@redhat.com> - 142.0.7444.59-1
+- Update to 142.0.7444.59
+  * High CVE-2025-12428: Type Confusion in V8
+  * High CVE-2025-12429: Inappropriate implementation in V8
+  * High CVE-2025-12430: Object lifecycle issue in Media
+  * High CVE-2025-12431: Inappropriate implementation in Extensions
+  * High CVE-2025-12432: Race in V8
+  * High CVE-2025-12433: Inappropriate implementation in V8
+  * High CVE-2025-12036: Inappropriate implementation in V8
+  * Medium CVE-2025-12434: Race in Storage
+  * Medium CVE-2025-12435: Incorrect security UI in Omnibox
+  * Medium CVE-2025-12436: Policy bypass in Extensions
+  * Medium CVE-2025-12437: Use after free in PageInfo
+  * Medium CVE-2025-12438: Use after free in Ozone
+  * Medium CVE-2025-12439: Inappropriate implementation in App-Bound Encryption
+  * Low CVE-2025-12440: Inappropriate implementation in Autofill
+  * Medium CVE-2025-12441: Out of bounds read in V8
+  * Medium CVE-2025-12443: Out of bounds read in WebXR
+  * Low CVE-2025-12444: Incorrect security UI in Fullscreen UI
+  * Low CVE-2025-12445: Policy bypass in Extensions
+  * Low CVE-2025-12446: Incorrect security UI in SplitView
+  * Low CVE-2025-12447: Incorrect security UI in Omnibox
+  * Refreshed ppc64le patches
+  * Refreshed system-brotli patch
+  * Refreshed clang++-unknown-argument patch
+  * Refreshed split-threshold-for-reg-with-hint patch
+  * Fixed some FTBFS caused by missing header files
+  * Fixed FTBFS caused by old rust compiler
+  * Fixed FTBFS caused by new glibc-2.42 in Rawhide
+  * Fixed FTBFS caused by old python-3.9.x in EL8/9
+  * Dropped obsoleted chromium-141-el9-ffmpeg-5.x-duration.patch for old ffmpeg on EL9
+
+* Wed Oct 22 2025 Than Ngo <than@redhat.com> - 141.0.7390.122-1
+- Update to 141.0.7390.122
+  * High CVE-2025-12036 chromium: Inappropriate implementation in V8
+
+* Wed Oct 15 2025 Than Ngo <than@redhat.com> - 141.0.7390.107-1
+- Update 141.0.7390.107
+  * High CVE-2025-11756: Use after free in Safe Browsing
+
 * Sun Oct 12 2025 Than Ngo <than@redhat.com> - 141.0.7390.76-1
 - Update to 141.0.7390.76
 
